@@ -82,7 +82,7 @@ export class PageService {
     const createdPage = await this.pageRepo.insertPage({
       slugId: generateSlugId(),
       title: createPageDto.title,
-      position: await this.nextPagePosition(
+      position: await this.firstPagePosition(
         createPageDto.spaceId,
         parentPageId,
       ),
@@ -131,6 +131,46 @@ export class PageService {
       } else {
         // if there is an existing page, we should get a position below it
         pagePosition = generateJitteredKeyBetween(lastPage.position, null);
+      }
+    }
+
+    return pagePosition;
+  }
+
+  async firstPagePosition(spaceId: string, parentPageId?: string) {
+    let pagePosition: string;
+
+    const firstPageQuery = this.db
+      .selectFrom('pages')
+      .select(['position'])
+      .where('spaceId', '=', spaceId)
+      .orderBy('position', 'asc')
+      .limit(1);
+
+    if (parentPageId) {
+      // check for children of this page
+      const firstPage = await firstPageQuery
+        .where('parentPageId', '=', parentPageId)
+        .executeTakeFirst();
+
+      if (!firstPage) {
+        pagePosition = generateJitteredKeyBetween(null, null);
+      } else {
+        // if there is an existing page, we should get a position above it
+        pagePosition = generateJitteredKeyBetween(null, firstPage.position);
+      }
+    } else {
+      // for root page
+      const firstPage = await firstPageQuery
+        .where('parentPageId', 'is', null)
+        .executeTakeFirst();
+
+      // if no existing page, make this the first
+      if (!firstPage) {
+        pagePosition = generateJitteredKeyBetween(null, null); // we expect "a0"
+      } else {
+        // if there is an existing page, we should get a position above it
+        pagePosition = generateJitteredKeyBetween(null, firstPage.position);
       }
     }
 
